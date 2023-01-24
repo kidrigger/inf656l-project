@@ -5,17 +5,16 @@ from pysmt.fnode import FNode
 from pysmt.logics import BOOL, QF_LRA, QF_UF, QF_UFLRA
 from pysmt.rewritings import conjunctive_partition
 from pysmt.solvers.solver import Solver as SolverType, Model
-from pysmt.typing import INT, REAL
+from pysmt.typing import REAL
 
 import dtc
 import mapper as mp
 from detyper import Detyper
-from utils import symbols, fcall, defun
-
+from utils import symbols
+from testdata import phi, f
+from pysmt.shortcuts import Equals, Solver, Not, And, get_unsat_core, get_env, GE, LE, NotEquals
 importlib.reload(dtc)
 importlib.reload(mp)
-from testdata import phi, x, y, f, zero
-from pysmt.shortcuts import Equals, Solver, Not, And, get_unsat_core, get_env, GE, LE, Minus, NotEquals
 
 LOGIC = QF_LRA
 SOLVER = 'z3'
@@ -107,7 +106,18 @@ def DTC(_phi):
     return False
 
 
+def print_expected_result(formula: FNode):
+    with Solver('z3', logic=QF_UFLRA) as correct:
+        correct.add_assertion(formula)
+        if correct.solve():
+            print('CORRECT: SAT')
+            print(correct.get_model())
+        else:
+            print('CORRECT: UNSAT')
+
+
 print(f"{'SAT' if DTC(phi) else 'UNSAT'}")
+print_expected_result(phi)
 
 p, q, r = symbols('p q r', REAL)
 
@@ -115,17 +125,10 @@ phi = And([
     Equals(p, q),
     Equals(f(p), f(q)),
     GE(q, r),
-    GE(f(q), f(r)),
+    GE(f(q), f(q)),
     NotEquals(q, r),
     NotEquals(f(q), f(r)),
     LE(p, r)
 ])
 print(f"{'SAT' if DTC(phi) else 'UNSAT'}")
-
-with Solver('z3', logic=QF_UFLRA) as correct:
-    correct.add_assertion(phi)
-    if correct.solve():
-        print('CORRECT: SAT')
-        print(correct.get_model())
-    else:
-        print('CORRECT: UNSAT')
+print_expected_result(phi)

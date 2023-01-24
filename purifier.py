@@ -37,7 +37,7 @@ class DTCPurifier(IdentityDagWalker):
         pass
 
     def get_theory(self, formula: FNode):
-        return self.env.theoryo.get_theory(formula)
+        return self.env.theoryo._get_theory(formula)
 
     @handles(op.RELATIONS - frozenset([op.EQUALS]))
     def walk_relations(self, formula: FNode) -> FNode:

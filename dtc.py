@@ -63,47 +63,59 @@ class DTCPurifier(IdentityDagWalker):
     theory: Theory
     mgr: FormulaManager
 
-    def __init__(self, environment: Environment, theory: Theory, print_formulae: bool = False, verbose: bool = False):
+    def __init__(self, environment: Environment, theory: Theory, verbose: bool = False, verbose_names: bool = False):
         IdentityDagWalker.__init__(self, environment)
 
-        self.verbose = verbose
-        self.print_formulae = print_formulae
+        self.verbose = verbose_names
+        self.print_formulae = verbose
         self.mgr = self.env.formula_manager
         self.euf = QF_UF.theory
         self.theory = theory
 
     def purify(self, formula: FNode) -> FNode:
-        """
-        Actual execution of purification of the formula
-        """
+        """Actual execution of purification of the formula"""
         f2 = self.print_walk(formula)
 
         if len(self.introduced_equalities) > 0:
             f2 = And(f2, And(self.introduced_equalities))
         return f2
 
-    def create_varname(self, formula: FNode) -> str:
+    def _create_varname(self, formula: FNode) -> str:
+        varname = f"v@{formula}"
         if self.verbose:
-            return f"v@{formula}"
+            return varname
         else:
             name = f"v@{self.count}"
             self.count += 1
             return name
 
-    def get_theory(self, formula: FNode) -> Theory:
+    def _get_theory(self, formula: FNode) -> Theory:
         return self.env.theoryo.get_theory(formula)
 
     def create_var(self, formula: FNode) -> FNode:
-        var = self.mgr.Symbol(self.create_varname(formula), formula.get_type())
+        """Creates a new variable.
+
+        If verbose_names flag is true, the variable created is named v@<formula> [e.g. f(x+y) -> v@'f(x+y)'
+        If verbose_names flag is false, the variable names are counted by numbers v@1 etc.
+        The DagWalker guarantees each node is only walked once, thus ensuring unique variables for each formula.
+
+        :param formula: A Formula node to create a name for.
+        :type formula: FNode
+
+        :returns: A name for the given formula.
+        """
+        var = self.mgr.Symbol(self._create_varname(formula), formula.get_type())
         return var
 
     def print_walk(self, formula) -> FNode:
+        """Walk with printing the formula"""
         if self.print_formulae:
             print(formula)
         return self.walk(formula)
 
     @handles(op.FUNCTION)
     def walk_function(self, formula: FNode, args: tuple[FNode], **kwargs) -> FNode:
+        """Walk through functions and replace arguments with variables"""
         args = filter(lambda lv: not lv.is_symbol(), args)
 
         subs = dict([(arg, self.create_var(arg)) for arg in args])
@@ -114,15 +126,16 @@ class DTCPurifier(IdentityDagWalker):
 
     @handles((op.RELATIONS - frozenset((op.EQUALS,))) | op.THEORY_OPERATORS)
     def walk_relation(self, formula: FNode, args: tuple[FNode], **kwargs) -> FNode:
-        sub_args = filter(lambda lv: self.get_theory(lv).uninterpreted, args)
+        """Walk through the theory relations and replace the sides with variables if they follow EUF."""
+        sub_args = filter(lambda lv: self._get_theory(lv).uninterpreted, args)
         subs = dict([(arg, self.create_var(arg)) for arg in sub_args])
         args = tuple(map(lambda lv: lv if lv not in subs else subs[lv], args))
 
         self.introduced_equalities += [Equals(a, b) for (a, b) in subs.items()]
 
-        ftype = formula.node_type()
+        formula_type = formula.node_type()
 
-        return self.mgr.create_node(ftype, args)
+        return self.mgr.create_node(formula_type, args)
 
 
 class DTCAtomClassifier(IdentityDagWalker):
@@ -180,11 +193,11 @@ class DTCAtomClassifier(IdentityDagWalker):
         return res
 
     def theory_filter(self, val: FNode):
-        theory: Theory = self.env.theoryo.get_theory(val)
+        theory: Theory = self.env.theoryo._get_theory(val)
         return theory <= self.theory
 
     def euf_filter(self, val: FNode):
-        theory: Theory = self.env.theoryo.get_theory(val)
+        theory: Theory = self.env.theoryo._get_theory(val)
         return theory.uninterpreted
 
     def process(self, formula: FNode):

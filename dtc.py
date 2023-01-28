@@ -55,19 +55,19 @@ class DTCPurifier(IdentityDagWalker):
     pure formula φ′ by recursively labeling terms t with fresh variables vt, and by conjoining the definition atom
     (vt = t) to the formula.
     """
-    verbose = False
-    print_formulae = False
+    verbose_names = False
+    debug_log = False
     count = 0
     introduced_equalities = []
     euf: Theory
     theory: Theory
     mgr: FormulaManager
 
-    def __init__(self, environment: Environment, theory: Theory, verbose: bool = False, verbose_names: bool = False):
+    def __init__(self, environment: Environment, theory: Theory, debug_log: bool = False, verbose_names: bool = False):
         IdentityDagWalker.__init__(self, environment)
 
-        self.verbose = verbose_names
-        self.print_formulae = verbose
+        self.verbose_names = verbose_names
+        self.debug_log = debug_log
         self.mgr = self.env.formula_manager
         self.euf = QF_UF.theory
         self.theory = theory
@@ -82,7 +82,7 @@ class DTCPurifier(IdentityDagWalker):
 
     def _create_varname(self, formula: FNode) -> str:
         varname = f"v@{formula}"
-        if self.verbose:
+        if self.verbose_names:
             return varname
         else:
             name = f"v@{self.count}"
@@ -109,20 +109,35 @@ class DTCPurifier(IdentityDagWalker):
 
     def print_walk(self, formula) -> FNode:
         """Walk with printing the formula"""
-        if self.print_formulae:
+        if self.debug_log:
             print(formula)
         return self.walk(formula)
 
     @handles(op.FUNCTION)
     def walk_function(self, formula: FNode, args: tuple[FNode], **kwargs) -> FNode:
         """Walk through functions and replace arguments with variables"""
-        args = filter(lambda lv: not lv.is_symbol(), args)
+        # args = filter(lambda lv: not lv.is_symbol(), args)
 
         subs = dict([(arg, self.create_var(arg)) for arg in args])
 
-        self.introduced_equalities += [Equals(a, b) for (a, b) in subs.items()]
+        args = tuple(map(lambda lv: lv if lv not in subs else subs[lv], args))
 
-        return formula.substitute(subs)
+        self.introduced_equalities += [Equals(a, b) for (a, b) in subs.items()]
+        return self.mgr.Function(formula.function_name(), args)
+
+    @handles(op.EQUALS)
+    def walk_equals(self, formula: FNode, args: tuple[FNode, FNode], **kwargs):
+        left, right = args
+        if not left.is_symbol() and not left.is_function_application():
+            nl = self.create_var(left)
+            self.introduced_equalities.append(Equals(left, nl))
+            left = nl
+        if not right.is_symbol() and not right.is_function_application():
+            nr = self.create_var(right)
+            self.introduced_equalities.append(Equals(right, nr))
+            right = nr
+
+        return self.mgr.Equals(left, right)
 
     @handles((op.RELATIONS - frozenset((op.EQUALS,))) | op.THEORY_OPERATORS)
     def walk_relation(self, formula: FNode, args: tuple[FNode], **kwargs) -> FNode:
@@ -182,8 +197,8 @@ class DTCAtomClassifier(IdentityDagWalker):
             self.process(atom)
 
         if self.verbose:
-            print("EUF", self.atoms_euf)
-            print("T  ", self.atoms_theory)
+            print("EUF", [a.serialize() for a in self.atoms_euf])
+            print("T  ", [a.serialize() for a in self.atoms_theory])
 
         assert (self.atoms_euf.isdisjoint(self.atoms_theory))
 
@@ -193,11 +208,11 @@ class DTCAtomClassifier(IdentityDagWalker):
         return res
 
     def theory_filter(self, val: FNode):
-        theory: Theory = self.env.theoryo._get_theory(val)
+        theory: Theory = self.env.theoryo.get_theory(val)
         return theory <= self.theory
 
     def euf_filter(self, val: FNode):
-        theory: Theory = self.env.theoryo._get_theory(val)
+        theory: Theory = self.env.theoryo.get_theory(val)
         return theory.uninterpreted
 
     def process(self, formula: FNode):

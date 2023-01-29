@@ -35,7 +35,7 @@ def decide(phi: FNode, logic: Logic):
     if ack_equalities_count < dtc_interface_equalities_count:
         return ack_phi
     else:
-        return pure_phi
+        return phi #pure_phi
 
 
 class PartialUtils(IdentityDagWalker):

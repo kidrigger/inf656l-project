@@ -76,6 +76,8 @@ class DTCPurifier(IdentityDagWalker):
         """Actual execution of purification of the formula"""
         f2 = self.print_walk(formula)
 
+        self.introduced_equalities = list(frozenset(self.introduced_equalities).difference(f2.get_atoms()))
+
         if len(self.introduced_equalities) > 0:
             f2 = And(f2, And(self.introduced_equalities))
         return f2

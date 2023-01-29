@@ -1,0 +1,4 @@
+ddSMT==2.0.3
+gprof2dot==2022.7.29
+progressbar==2.5
+PySMT==0.9.5

@@ -39,11 +39,11 @@ class AckermannExpander(IdentityDagWalker):
 
     def ack(self, formula: FNode, restrict_to: set[FNode] = None):
         self.restrict_to = restrict_to
+        self.ackermann_equalities_count = 0
 
         modded_formula = self.walk(formula)
 
         ackermann_constraints = [self.create_ackermann_constraints(application_set) for _, application_set in self.function_apps.items()]
-        self.ackermann_equalities_count = len(ackermann_constraints)
         self.ackermann_constraints = self.mgr.And(ackermann_constraints)
 
         return self.mgr.And(modded_formula, self.ackermann_constraints)
@@ -95,7 +95,9 @@ class AckermannExpander(IdentityDagWalker):
         assert app1.function == app2.function
         assert app1.replaced_variable != app2.replaced_variable
 
-        lhs = self.mgr.And([self.mgr.Equals(x, y) for x, y in zip(app1.args, app2.args)])
+        lhs_eqs = [self.mgr.Equals(x, y) for x, y in zip(app1.args, app2.args)]
+        self.ackermann_equalities_count += (len(lhs_eqs) + 1)
+        lhs = self.mgr.And(lhs_eqs)
         rhs = self.mgr.Equals(app1.replaced_variable, app2.replaced_variable)
         return self.mgr.Implies(lhs, rhs)
 
